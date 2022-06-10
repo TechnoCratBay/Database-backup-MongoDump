@@ -1,0 +1,102 @@
+#Creating Backup of databases
+#Taking backup of all the databases in the $databases array and storing them at the $location
+$databases = @("database1","database2")
+$number_of_db = $databases.length
+
+#creating backup folder with date name
+$today= Get-Date -format 'dd.MM.yyyy HH_mm_ss_fff'
+$location = "\\server\location\place\new\$today"
+
+#creating mongo dump for all the items in $databases array
+for ($i=0; $i -lt $number_of_db ; $i=$i+1)
+{
+ try
+   {
+     $dbname = $databases[$i]
+     mongodump.exe --host=10.10.0.21 --port=27011 --db=$dbname --username=admin --password=admin --authenticationDatabase=admin --out=$location
+     write-host ("`nSuccessfully created Backup of {0} on " -f $dbname) -ForegroundColor Yellow (Get-Date -format 'dd.MM.yyyy HH:mm:ss:fff')
+   }
+    catch
+   {
+     write-Error -Message "Some Error Occurred during creation of database backup" -ErrorAction Stop
+   }
+
+}
+
+#delete previous databases backup dump
+$drawline = "____________________________________________________________________________________`n"
+$count = 0
+$delete_from_month= (-3)
+
+#get all the items at the location and sort them according to the latest time
+$filelist = Get-ChildItem -Path "\\server\location\place\new\$today"| Sort-Object LastWriteTime -Descending 
+
+#displaying all the items in the Directory
+write-host -ForegroundColor Yellow ("`nlist of all the items at the storage location is as: `n")
+$filelist
+$drawline
+
+#Total number of itemsin the folder
+$items_in_the_folder = $filelist.count
+
+#proceeding only when the folder is not empty
+if ($items_in_the_folder -ne 0)
+{
+
+#displaying the details of database backup until the prior date 
+write-host -ForegroundColor Yellow ("`nCurrrent list of DB Backups : `n")
+$filelist -like "*.*.*_*_*_*" 
+
+#counting number of database ibackups
+    for ($i=0;$i -lt $items_in_the_folder ;$i++)
+         {
+           if($filelist[$i] -like "*.*.*_*_*_*" )
+             {
+                 $count +=1
+             }
+          }
+}
+
+#displaying the number of DB backups present
+$drawline
+write-host -ForegroundColor Green ("Total number of DB backups present are {0}" -f $count)
+$drawline
+ 
+#deleting all the object in filelist from the DB folder 
+if($count -gt 2)
+{
+write-host -Foregroundcolor red ("`nList of DB Backups to be deleted :`n")
+for ($i=2; $i -lt $items_in_the_folder; $i++)
+  {
+  
+    try
+        {
+            
+            if ($filelist[$i] -like "*.*.*_*_*_*")   
+               {     
+                   if($filelist[$i].lastwritetime -lt ((get-date).AddMonths($delete_from_month)))
+                    {
+                     $filelist[$i]
+                     $filelist[$i]|Remove-Item -Recurse -Force
+                     write-host -foregroundcolor red ("deleted") 
+                     }
+                }        
+        }
+  catch
+        {
+            Write-Error -Message "Some Error Occurred while deleting the DB backups" -ErrorAction Stop
+        }
+   }
+
+$drawline
+
+#displaying database details after deletion 
+Write-Host -ForegroundColor yellow ("List of remaining databases backup are as :`n")
+$newfilelist = Get-ChildItem -Path "\\server\location\place\new\" | Sort-Object LastWriteTime -Descending 
+$newfilelist | ForEach-Object {
+    if ( $_ -like "*.*.*_*_*_*")   
+        {
+          $_
+        } 
+    }
+} 
